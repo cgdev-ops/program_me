@@ -1,0 +1,39 @@
+{
+  "identityTitle": "Disciplined Engineer",
+  "categories": [
+    {
+      "id": "1",
+      "name": "DSA & Algorithms",
+      "isDefault": true
+    },
+    {
+      "id": "2",
+      "name": "System Architecture",
+      "isDefault": true
+    },
+    {
+      "id": "3",
+      "name": "Debugging",
+      "isDefault": true
+    },
+    {
+      "id": "4",
+      "name": "Documentation",
+      "isDefault": true
+    }
+  ],
+  "sessions": [
+    {
+      "id": "a823098d-c8d6-46af-a367-5492dc799a70",
+      "date": "2026-07-02T13:49:00.007Z",
+      "categoryId": "4",
+      "durationMinutes": 0,
+      "takeawayNote": ""
+    }
+  ],
+  "settings": {
+    "theme": "synapse-os",
+    "defaultTimerMinutes": 30,
+    "defaultBreakMinutes": 5
+  }
+}
