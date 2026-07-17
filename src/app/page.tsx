@@ -1,513 +1,614 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import {
   Settings,
   Play,
+  Pause,
   Square,
   Download,
+  Upload,
   Plus,
+  Trash2,
+  CheckCircle,
+  Circle,
+  Cross,
   X,
-  Hexagon,
+  Book,
 } from "lucide-react";
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
-// --- Utility for ID Generation (replaces crypto.randomUUID for secure context compliance) ---
-const generateUUID = () => {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
+// --- STATE MANAGEMENT ---
 
-// --- Interfaces ---
-interface Category {
-  id: string;
-  name: string;
-  isDefault: boolean;
-}
-
-interface FocusSession {
+interface Session {
   id: string;
   date: string;
-  categoryId: string;
   durationMinutes: number;
-  takeawayNote: string;
 }
 
-interface AppSettings {
-  theme: "synapse-os" | "synapse-hub";
-  defaultTimerMinutes: number;
-  defaultBreakMinutes: number;
+interface DailyTask {
+  day: number;
+  description: string;
+  durationSpent: number; // in seconds
+  isCompleted: boolean;
+}
+
+interface Plan {
+  id: string;
+  name: string;
+  totalDays: number;
+  tasks: DailyTask[];
 }
 
 interface AppState {
-  identityTitle: string;
-  categories: Category[];
-  sessions: FocusSession[];
-  settings: AppSettings;
-  addSession: (session: FocusSession) => void;
-  addCategory: (name: string) => void;
-  updateSettings: (newSettings: Partial<AppSettings>) => void;
+  theme: "os" | "hub";
+  setTheme: (theme: "os" | "hub") => void;
+  sessions: Session[];
+  addSession: (session: Session) => void;
+  plans: Plan[];
+  addPlan: (plan: Plan) => void;
+  deletePlan: (id: string) => void;
+  updateTask: (planId: string, day: number, data: Partial<DailyTask>) => void;
   exportData: () => void;
+  importData: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-// --- Global Zustand Store ---
+const generateId = () => {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).substring(2, 15);
+};
+
 const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      identityTitle: "Disciplined Engineer",
-      categories: [
-        { id: "1", name: "DSA & Algorithms", isDefault: true },
-        { id: "2", name: "System Architecture", isDefault: true },
-        { id: "3", name: "Debugging", isDefault: true },
-        { id: "4", name: "Documentation", isDefault: true },
-      ],
+      theme: "os",
+      setTheme: (theme) => set({ theme }),
       sessions: [],
-      settings: {
-        theme: "synapse-os",
-        defaultTimerMinutes: 30,
-        defaultBreakMinutes: 5,
-      },
       addSession: (session) =>
         set((state) => ({ sessions: [...state.sessions, session] })),
-      addCategory: (name) =>
+      plans: [],
+      addPlan: (plan) => set((state) => ({ plans: [...state.plans, plan] })),
+      deletePlan: (id) =>
+        set((state) => ({ plans: state.plans.filter((p) => p.id !== id) })),
+      updateTask: (planId, day, data) =>
         set((state) => ({
-          categories: [
-            ...state.categories,
-            { id: generateUUID(), name, isDefault: false },
-          ],
-        })),
-      updateSettings: (newSettings) =>
-        set((state) => ({
-          settings: { ...state.settings, ...newSettings },
+          plans: state.plans.map((plan) =>
+            plan.id === planId
+              ? {
+                  ...plan,
+                  tasks: plan.tasks.map((task) =>
+                    task.day === day ? { ...task, ...data } : task,
+                  ),
+                }
+              : plan,
+          ),
         })),
       exportData: () => {
-        const dataStr = JSON.stringify(get(), null, 2);
-        const blob = new Blob([dataStr], { type: "application/json" });
+        const state = get();
+        const data = {
+          sessions: state.sessions,
+          plans: state.plans,
+          theme: state.theme,
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {
+          type: "application/json",
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `synapse-backup-${new Date().toISOString().split("T")[0]}.json`;
+        a.download = `synapse-backup-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
+        URL.revokeObjectURL(url);
+      },
+      importData: (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const parsed = JSON.parse(e.target?.result as string);
+            if (parsed.sessions) set({ sessions: parsed.sessions });
+            if (parsed.plans) set({ plans: parsed.plans });
+            if (parsed.theme) set({ theme: parsed.theme });
+            alert("Data imported successfully!");
+          } catch (error) {
+            alert("Invalid backup file.");
+          }
+        };
+        reader.readAsText(file);
       },
     }),
     { name: "synapse-storage" },
   ),
 );
 
-// --- Settings Modal Component ---
-const SettingsModal = ({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) => {
-  const { settings, updateSettings, exportData } = useAppStore();
-  const [newCatName, setNewCatName] = useState("");
-  const addCategory = useAppStore((state) => state.addCategory);
+// --- COMPONENTS ---
 
-  if (!isOpen) return null;
+const FlowEngine = () => {
+  const [isActive, setIsActive] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const addSession = useAppStore((state) => state.addSession);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isActive) {
+      interval = setInterval(() => setSeconds((s) => s + 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isActive]);
+
+  const handleStop = () => {
+    setIsActive(false);
+    if (seconds > 60) {
+      addSession({
+        id: generateId(),
+        date: new Date().toISOString(),
+        durationMinutes: Math.floor(seconds / 60),
+      });
+    }
+    setSeconds(0);
+  };
+
+  const formatTime = (totalSeconds: number) => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${h > 0 ? h + ":" : ""}${m.toString().padStart(2, "0")}:${s
+      .toString()
+      .padStart(2, "0")}`;
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-white dark:bg-zinc-900 border dark:border-zinc-800 rounded-2xl p-6 shadow-2xl relative">
+    <div className="flex flex-col items-center justify-center py-20">
+      <div className="text-7xl font-bold tracking-tighter mb-8 font-mono text-zinc-900 dark:text-blue-400 drop-shadow-[0_0_15px_rgba(96,165,250,0.4)]">
+        {formatTime(seconds)}
+      </div>
+      <div className="flex gap-4">
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-900 dark:hover:text-white"
+          onClick={() => setIsActive(!isActive)}
+          className="flex items-center gap-2 px-8 py-4 bg-zinc-900 dark:bg-blue-600/20 text-white dark:text-blue-400 border border-zinc-800 dark:border-blue-500/50 rounded-xl hover:bg-zinc-800 dark:hover:bg-blue-600/40 transition-all font-bold tracking-widest uppercase"
         >
-          <X size={24} />
+          {isActive ? <Pause size={20} /> : <Play size={20} />}
+          {isActive ? "Pause" : "Engage"}
         </button>
-        <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
-          System Configuration
-        </h2>
-
-        <div className="space-y-6">
-          {/* Theme Toggle */}
-          <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-              Visual Interface
-            </label>
-            <div className="flex gap-2 p-1 bg-gray-100 dark:bg-zinc-950 rounded-lg">
-              <button
-                onClick={() => updateSettings({ theme: "synapse-os" })}
-                className={`flex-1 py-2 px-3 rounded-md text-sm font-bold transition-all ${settings.theme === "synapse-os" ? "bg-zinc-800 text-blue-400 shadow-lg border border-blue-500/30" : "text-gray-500 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-zinc-800/50"}`}
-              >
-                Synapse OS
-              </button>
-              <button
-                onClick={() => updateSettings({ theme: "synapse-hub" })}
-                className={`flex-1 py-2 px-3 rounded-md text-sm font-bold transition-all ${settings.theme === "synapse-hub" ? "bg-white text-gray-900 shadow-lg border border-gray-200" : "text-gray-500 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-zinc-800/50"}`}
-              >
-                Synapse Hub
-              </button>
-            </div>
-          </div>
-
-          {/* Defaults */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Default Focus (Min)
-              </label>
-              <input
-                type="number"
-                value={settings.defaultTimerMinutes}
-                onChange={(e) =>
-                  updateSettings({
-                    defaultTimerMinutes: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Default Break (Min)
-              </label>
-              <input
-                type="number"
-                value={settings.defaultBreakMinutes}
-                onChange={(e) =>
-                  updateSettings({
-                    defaultBreakMinutes: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Quick Category Add */}
-          <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-              Add New Category
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="e.g., Marketing, Emails..."
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                className="flex-1 p-2 bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-              />
-              <button
-                onClick={() => {
-                  if (newCatName) {
-                    addCategory(newCatName);
-                    setNewCatName("");
-                  }
-                }}
-                className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-          </div>
-
-          {/* Export */}
-          <div className="pt-4 border-t dark:border-zinc-800">
-            <button
-              onClick={exportData}
-              className="flex items-center justify-center gap-2 w-full p-3 bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-white font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
-            >
-              <Download size={18} /> Export JSON Backup
-            </button>
-          </div>
-        </div>
+        {seconds > 0 && (
+          <button
+            onClick={handleStop}
+            className="flex items-center gap-2 px-8 py-4 bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 rounded-xl hover:bg-red-500/20 transition-all font-bold tracking-widest uppercase"
+          >
+            <Book size={20} />
+            Log
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
-// --- Flow Engine Component ---
-const FlowEngine = () => {
-  const { categories, settings, addSession } = useAppStore();
-  const [appState, setAppState] = useState<"idle" | "running" | "logging">(
-    "idle",
-  );
-  const [mode, setMode] = useState<"stopwatch" | "timer">("stopwatch");
-  const [secondsActive, setSecondsActive] = useState(0);
-  const [targetMinutes, setTargetMinutes] = useState(
-    settings.defaultTimerMinutes,
-  );
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [takeaway, setTakeaway] = useState("");
-
-  // Sync settings if they change
-  useEffect(() => {
-    setTargetMinutes(settings.defaultTimerMinutes);
-  }, [settings.defaultTimerMinutes]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (appState === "running") {
-      interval = setInterval(() => {
-        setSecondsActive((prev) => {
-          const newTotal = prev + 1;
-          if (mode === "timer" && newTotal >= targetMinutes * 60) {
-            clearInterval(interval);
-            setAppState("logging");
-            return targetMinutes * 60;
-          }
-          return newTotal;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [appState, mode, targetMinutes]);
-
-  const handleStart = () => {
-    if (!selectedCategory)
-      return alert("Select a category to set your intent.");
-    setAppState("running");
-  };
-
-  const handleSaveCard = () => {
-    addSession({
-      id: generateUUID(),
-      date: new Date().toISOString(),
-      categoryId: selectedCategory,
-      durationMinutes: Math.floor(secondsActive / 60),
-      takeawayNote: takeaway,
-    });
-    setAppState("idle");
-    setSecondsActive(0);
-    setTakeaway("");
-  };
-
-  const getDisplayTime = () => {
-    const displaySeconds =
-      mode === "timer" ? targetMinutes * 60 - secondsActive : secondsActive;
-    const m = Math.floor(displaySeconds / 60)
-      .toString()
-      .padStart(2, "0");
-    const s = (displaySeconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
+const HexGrid = ({ plan }: { plan: Plan }) => {
+  if (!plan) return null;
 
   return (
-    <div className="flex flex-col items-center justify-center p-8 w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl shadow-sm transition-colors h-full min-h-[400px]">
-      {appState !== "logging" && (
-        <div className="w-full text-center">
-          {appState === "idle" && (
-            <div className="flex justify-center gap-2 mb-8 p-1 bg-gray-100 dark:bg-zinc-950 rounded-lg w-48 mx-auto">
-              <button
-                onClick={() => setMode("stopwatch")}
-                className={`flex-1 py-1 rounded text-sm font-bold transition ${mode === "stopwatch" ? "bg-white dark:bg-zinc-800 text-gray-900 dark:text-white shadow" : "text-gray-400"}`}
-              >
-                Up
-              </button>
-              <button
-                onClick={() => setMode("timer")}
-                className={`flex-1 py-1 rounded text-sm font-bold transition ${mode === "timer" ? "bg-white dark:bg-zinc-800 text-gray-900 dark:text-white shadow" : "text-gray-400"}`}
-              >
-                Down
-              </button>
-            </div>
-          )}
-
-          <h2
-            className={`text-7xl md:text-8xl font-mono mb-8 font-light tracking-tighter ${appState === "running" ? "text-blue-600 dark:text-blue-400" : "text-gray-900 dark:text-white"}`}
-          >
-            {getDisplayTime()}
-          </h2>
-
-          {appState === "idle" ? (
-            <div className="flex flex-col gap-4 max-w-xs mx-auto">
-              {mode === "timer" && (
-                <input
-                  type="number"
-                  value={targetMinutes}
-                  onChange={(e) => setTargetMinutes(Number(e.target.value))}
-                  className="p-3 border border-gray-200 dark:border-zinc-800 rounded-lg bg-gray-50 dark:bg-zinc-950 text-center font-mono text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
-              )}
-              <select
-                className="p-3 border border-gray-200 dark:border-zinc-800 rounded-lg bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-              >
-                <option value="" disabled>
-                  Select Target Focus...
-                </option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleStart}
-                className="flex items-center justify-center gap-2 bg-blue-600 text-white p-4 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 mt-2"
-              >
-                <Play size={20} fill="currentColor" /> Initiate Flow
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setAppState("logging")}
-              className="flex items-center justify-center gap-2 bg-red-100 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 p-4 rounded-lg font-bold hover:bg-red-600 hover:text-white transition w-full max-w-xs mx-auto"
-            >
-              <Square size={20} fill="currentColor" /> Halt & Log Session
-            </button>
-          )}
+    <div className="flex flex-wrap justify-center gap-2 p-6 max-w-2xl mx-auto">
+      {plan.tasks.map((task) => (
+        <div
+          key={task.day}
+          className={`relative w-16 h-16 flex items-center justify-center font-mono text-sm font-bold transition-all duration-300
+            ${
+              task.isCompleted
+                ? "bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.6)] dark:bg-blue-600 dark:text-white"
+                : task.durationSpent > 0
+                  ? "bg-blue-900/40 text-blue-300 border border-blue-500/50"
+                  : "bg-zinc-200 text-zinc-400 dark:bg-zinc-900 dark:text-zinc-600 dark:border-zinc-800 border"
+            }
+          `}
+          style={{
+            clipPath:
+              "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
+          }}
+        >
+          {task.isCompleted ? <CheckCircle size={20} /> : task.day}
         </div>
-      )}
-
-      {appState === "logging" && (
-        <div className="w-full max-w-sm mx-auto flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-300">
-          <div className="border-b border-gray-200 dark:border-zinc-800 pb-4 mb-2">
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Execution Log
-            </h3>
-            <p className="text-sm text-gray-500 mt-1">
-              Focused duration:{" "}
-              <span className="font-mono text-blue-500">
-                {Math.floor(secondsActive / 60)}m
-              </span>
-            </p>
-          </div>
-
-          <select
-            className="p-3 border border-gray-200 dark:border-zinc-800 rounded-lg bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-          >
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-
-          <textarea
-            className="w-full p-4 border border-gray-200 dark:border-zinc-800 rounded-lg h-32 bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 resize-none placeholder:text-gray-400 dark:placeholder:text-zinc-600"
-            placeholder="Log your reps: Bug details, key takeaways, links to commits..."
-            value={takeaway}
-            onChange={(e) => setTakeaway(e.target.value)}
-          />
-
-          <button
-            onClick={handleSaveCard}
-            className="bg-green-600 text-white p-4 rounded-lg font-bold hover:bg-green-700 transition shadow-lg shadow-green-500/20 mt-2"
-          >
-            Commit to Mastery Record
-          </button>
-        </div>
-      )}
+      ))}
     </div>
   );
 };
 
-// --- Main Page Assembly ---
-export default function Dashboard() {
-  const { settings, identityTitle, sessions } = useAppStore();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isClient, setIsClient] = useState(false);
+const PlanCreator = () => {
+  const { plans, addPlan, deletePlan, updateTask } = useAppStore();
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanDays, setNewPlanDays] = useState(30);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [activeDayTimer, setActiveDayTimer] = useState<number | null>(null);
 
-  // Hydration fix for Zustand
+  // Timer Ref for Day Cards
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCreatePlan = () => {
+    if (!newPlanName) return;
+    const tasks: DailyTask[] = Array.from({ length: newPlanDays }).map(
+      (_, i) => ({
+        day: i + 1,
+        description: "",
+        durationSpent: 0,
+        isCompleted: false,
+      }),
+    );
+
+    addPlan({
+      id: generateId(),
+      name: newPlanName,
+      totalDays: newPlanDays,
+      tasks,
+    });
+    setNewPlanName("");
+  };
+
+  const toggleDayTimer = (
+    planId: string,
+    day: number,
+    currentDuration: number,
+  ) => {
+    if (activeDayTimer === day) {
+      // Stop timer
+      if (timerRef.current) clearInterval(timerRef.current);
+      setActiveDayTimer(null);
+    } else {
+      // Start timer
+      if (timerRef.current) clearInterval(timerRef.current);
+      setActiveDayTimer(day);
+      timerRef.current = setInterval(() => {
+        updateTask(planId, day, { durationSpent: currentDuration + 1 });
+        currentDuration++;
+      }, 1000);
+    }
+  };
+
   useEffect(() => {
-    setIsClient(true);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
-  if (!isClient) return null; // Prevent SSR flash
-
-  // Determine global theme
-  const isDark = settings.theme === "synapse-os";
-  const totalHours = (
-    sessions.reduce((acc, curr) => acc + curr.durationMinutes, 0) / 60
-  ).toFixed(1);
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId);
 
   return (
-    <div className={isDark ? "dark" : ""}>
-      <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 font-sans transition-colors duration-300 selection:bg-blue-500/30">
-        {/* Navigation & Identity Bar */}
-        <nav className="w-full px-6 py-4 flex items-center justify-between bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-md bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Hexagon className="text-white" size={20} />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+      {/* Left Column: Plan List & Creator */}
+      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 flex flex-col gap-6">
+        <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+          Pathways
+        </h2>
+
+        {/* Create Form */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Course/Plan Name..."
+            value={newPlanName}
+            onChange={(e) => setNewPlanName(e.target.value)}
+            className="flex-1 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-4 py-2 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500"
+          />
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={newPlanDays}
+            onChange={(e) => setNewPlanDays(parseInt(e.target.value) || 1)}
+            className="w-20 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg px-2 py-2 text-zinc-900 dark:text-white text-center focus:outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={handleCreatePlan}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center"
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+
+        {/* Plan List */}
+        <div className="flex flex-col gap-2 overflow-y-auto max-h-[500px] pr-2">
+          {plans.map((plan) => (
+            <div
+              key={plan.id}
+              onClick={() => setSelectedPlanId(plan.id)}
+              className={`p-4 rounded-xl cursor-pointer border transition-all flex justify-between items-center ${
+                selectedPlanId === plan.id
+                  ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-sm"
+                  : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+              }`}
+            >
+              <div>
+                <h3 className="font-bold text-zinc-900 dark:text-zinc-100">
+                  {plan.name}
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {plan.tasks.filter((t) => t.isCompleted).length} /{" "}
+                  {plan.totalDays} Days Completed
+                </p>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deletePlan(plan.id);
+                  if (selectedPlanId === plan.id) setSelectedPlanId(null);
+                }}
+                className="text-zinc-400 hover:text-red-500 transition-colors p-2"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right Column: Active Plan Details & Hex Grid */}
+      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 flex flex-col gap-6 overflow-y-auto max-h-[700px]">
+        {selectedPlan ? (
+          <>
+            <div className="text-center mb-4">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest drop-shadow-[0_0_8px_rgba(96,165,250,0.3)]">
+                {selectedPlan.name}
+              </h2>
+            </div>
+
+            <HexGrid plan={selectedPlan} />
+
+            <div className="mt-8 flex flex-col gap-4">
+              <h3 className="font-bold text-zinc-900 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                Daily Nodes
+              </h3>
+              {selectedPlan.tasks.map((task) => (
+                <div
+                  key={task.day}
+                  className={`p-4 rounded-xl border flex flex-col gap-3 transition-colors ${
+                    task.isCompleted
+                      ? "bg-green-50/50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30"
+                      : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-zinc-900 dark:text-zinc-200 font-mono">
+                      DAY {task.day}
+                    </span>
+                    <button
+                      onClick={() =>
+                        updateTask(selectedPlan.id, task.day, {
+                          isCompleted: !task.isCompleted,
+                        })
+                      }
+                      className={`${
+                        task.isCompleted
+                          ? "text-green-500"
+                          : "text-zinc-400 hover:text-blue-500"
+                      } transition-colors`}
+                    >
+                      {task.isCompleted ? (
+                        <CheckCircle size={24} />
+                      ) : (
+                        <Circle size={24} />
+                      )}
+                    </button>
+                  </div>
+
+                  <textarea
+                    placeholder="Objective / Notes for today..."
+                    value={task.description}
+                    onChange={(e) =>
+                      updateTask(selectedPlan.id, task.day, {
+                        description: e.target.value,
+                      })
+                    }
+                    className="w-full bg-transparent border-b border-zinc-300 dark:border-zinc-700 focus:border-blue-500 outline-none text-sm text-zinc-800 dark:text-zinc-300 py-1 resize-none h-10"
+                  />
+
+                  <div className="flex items-center gap-4 text-sm font-mono mt-2">
+                    <button
+                      onClick={() =>
+                        toggleDayTimer(
+                          selectedPlan.id,
+                          task.day,
+                          task.durationSpent,
+                        )
+                      }
+                      className={`flex items-center gap-2 px-3 py-1 rounded-md transition-colors ${
+                        activeDayTimer === task.day
+                          ? "bg-red-500/20 text-red-600 dark:text-red-400"
+                          : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                      }`}
+                    >
+                      {activeDayTimer === task.day ? (
+                        <Pause size={14} />
+                      ) : (
+                        <Play size={14} />
+                      )}
+                      {activeDayTimer === task.day ? "Active" : "Timer"}
+                    </button>
+                    <span className="text-zinc-500">
+                      {Math.floor(task.durationSpent / 60)}m{" "}
+                      {task.durationSpent % 60}s logged
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="h-full flex items-center justify-center text-zinc-400 text-sm uppercase tracking-widest">
+            Select a pathway to initialize visualization
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- MAIN LAYOUT ---
+
+export default function Dashboard() {
+  const { theme, setTheme, sessions, exportData, importData } = useAppStore();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"flow" | "pathways">("flow");
+
+  // Apply dark mode class to HTML element
+  useEffect(() => {
+    if (theme === "os") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [theme]);
+
+  const totalMinutes = sessions.reduce(
+    (acc, curr) => acc + curr.durationMinutes,
+    0,
+  );
+  const totalHours = (totalMinutes / 60).toFixed(1);
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-500 font-sans selection:bg-blue-500/30 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row justify-between items-center gap-6 pb-6 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-zinc-900 dark:bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+              <div className="w-4 h-4 border-2 border-white transform rotate-45"></div>
             </div>
             <div>
-              <h1 className="font-bold text-gray-900 dark:text-white leading-tight">
-                Synapse
+              <h1 className="text-2xl font-bold tracking-tighter uppercase dark:text-white text-zinc-900">
+                Synapse{" "}
+                <span className="text-blue-500 dark:text-blue-400 font-light">
+                  {theme.toUpperCase()}
+                </span>
               </h1>
-              <p className="text-xs text-blue-600 dark:text-blue-400 font-mono tracking-widest uppercase">
-                {identityTitle}
+              <p className="text-xs tracking-widest text-zinc-500 dark:text-zinc-400">
+                Progress Through Discipline
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex flex-col items-end mr-4">
-              <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">
-                Deep Work
-              </span>
-              <span className="text-sm font-mono text-gray-900 dark:text-white">
-                {totalHours} Hours
-              </span>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab("flow")}
+              className={`px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-lg transition-colors ${
+                activeTab === "flow"
+                  ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+              }`}
+            >
+              Flow Engine
+            </button>
+            <button
+              onClick={() => setActiveTab("pathways")}
+              className={`px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-lg transition-colors ${
+                activeTab === "pathways"
+                  ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+              }`}
+            >
+              Pathways
+            </button>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <div className="text-2xl font-bold dark:text-blue-400 text-zinc-800 font-mono">
+                {totalHours}
+              </div>
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500">
+                Total Hours
+              </div>
             </div>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 text-gray-500 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-zinc-800 rounded-lg transition"
+              className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
             >
-              <Settings size={20} />
+              <Settings
+                size={20}
+                className="text-zinc-600 dark:text-zinc-400"
+              />
             </button>
           </div>
-        </nav>
+        </header>
 
-        {/* Stoic Quote Identity Primer */}
-        <div className="w-full py-8 px-6 text-center border-b border-gray-200 dark:border-zinc-900/50 bg-white/50 dark:bg-zinc-900/20">
-          <p className="max-w-2xl mx-auto text-lg md:text-xl font-medium text-gray-600 dark:text-zinc-400 italic">
-            "You have power over your mind - not outside events. Realize this,
-            and you will find strength."
-          </p>
-          <p className="text-sm text-gray-400 dark:text-zinc-500 mt-4 font-bold tracking-widest uppercase">
-            — Marcus Aurelius
-          </p>
-        </div>
+        {/* Main Content Area */}
+        <main className="min-h-[60vh]">
+          {activeTab === "flow" ? <FlowEngine /> : <PlanCreator />}
+        </main>
 
-        {/* Main Content Grid */}
-        <main className="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
-          {/* Left Column: Flow Engine */}
-          <div className="lg:col-span-5 flex flex-col gap-8 h-full">
-            <FlowEngine />
-          </div>
-
-          {/* Right Column: Hexagonal Tracker Placeholder */}
-          <div className="lg:col-span-7 h-full">
-            <div className="w-full h-full min-h-[400px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
-              <div className="absolute top-6 left-6 flex items-center justify-between w-[calc(100%-3rem)]">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                  Atomic Hex Grid
-                </h3>
-                <select className="bg-gray-100 dark:bg-zinc-800 text-sm text-gray-600 dark:text-gray-300 border-none rounded px-2 py-1 outline-none">
-                  <option>30-Day View</option>
-                  <option>All-Time</option>
-                </select>
+        {/* Settings Modal */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-xl font-bold uppercase tracking-widest">
+                  Settings
+                </h2>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              {/* Wireframe Placeholder for next step */}
-              <div className="flex flex-col items-center gap-4 opacity-50 dark:opacity-30 mt-8">
-                <Hexagon size={64} className="text-gray-400" />
-                <p className="text-gray-500 font-medium text-center max-w-sm">
-                  The Hexagonal Canvas Engine will inject here in Phase 4,
-                  parsing your stored JSON sessions into a living mastery web.
-                </p>
+              <div className="space-y-8">
+                <div>
+                  <label className="text-xs font-bold tracking-widest text-zinc-500 uppercase block mb-3">
+                    Interface Theme
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setTheme("os")}
+                      className={`flex-1 py-3 rounded-lg border font-bold uppercase text-sm tracking-wider transition-all ${
+                        theme === "os"
+                          ? "bg-zinc-900 border-zinc-900 text-white dark:bg-blue-600/20 dark:border-blue-500 dark:text-blue-400"
+                          : "bg-transparent border-zinc-200 text-zinc-500 dark:border-zinc-800"
+                      }`}
+                    >
+                      OS (Dark)
+                    </button>
+                    <button
+                      onClick={() => setTheme("hub")}
+                      className={`flex-1 py-3 rounded-lg border font-bold uppercase text-sm tracking-wider transition-all ${
+                        theme === "hub"
+                          ? "bg-zinc-100 border-zinc-300 text-zinc-900"
+                          : "bg-transparent border-zinc-200 text-zinc-500 dark:border-zinc-800"
+                      }`}
+                    >
+                      Hub (Light)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800">
+                  <label className="text-xs font-bold tracking-widest text-zinc-500 uppercase block mb-3">
+                    Data Management
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={exportData}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-lg transition-colors text-sm font-bold"
+                    >
+                      <Download size={16} /> Backup
+                    </button>
+                    <label className="flex-1 flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-lg transition-colors text-sm font-bold cursor-pointer">
+                      <Upload size={16} /> Restore
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={importData}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </main>
-
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-        />
+        )}
       </div>
     </div>
   );
 }
-// add hexagonal
