@@ -90,7 +90,7 @@ const generateId = () => {
     : Math.random().toString(36).substring(2, 15);
 };
 
-const triggerDownload = (data: JSON, filename: string) => {
+const triggerDownload = (data: unknown, filename: string) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json",
   });
@@ -102,9 +102,9 @@ const triggerDownload = (data: JSON, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-// ============================================================================
+
 // --- STORE ---
-// ============================================================================
+
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -153,10 +153,10 @@ export const useAppStore = create<AppState>()(
           ),
         })),
 
-      // --- NEW: Initial Applications State ---
+      //  Applications State 
       applications: [],
       addApplication: (app) =>
-        set((state) => ({ applications: [app, ...state.applications] })), // Add to top
+        set((state) => ({ applications: [app, ...state.applications] })), 
       updateApplication: (id, data) =>
         set((state) => ({
           applications: state.applications.map((app) =>
@@ -174,7 +174,7 @@ export const useAppStore = create<AppState>()(
           type: "SYNAPSE_BACKUP",
           sessions: state.sessions,
           plans: state.plans,
-          applications: state.applications, // <-- Added to backup
+          applications: state.applications, 
           theme: state.theme,
           settings: state.settings,
           categories: state.categories,
@@ -204,7 +204,7 @@ export const useAppStore = create<AppState>()(
               if (parsed.sessions) set({ sessions: parsed.sessions });
               if (parsed.plans) set({ plans: parsed.plans });
               if (parsed.applications)
-                set({ applications: parsed.applications }); // <-- Added to restore
+                set({ applications: parsed.applications }); 
               if (parsed.theme) set({ theme: parsed.theme });
               if (parsed.settings) set({ settings: parsed.settings });
               if (parsed.categories) set({ categories: parsed.categories });
