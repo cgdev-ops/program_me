@@ -1,8 +1,8 @@
 
-// ============================================================================
 // --- COMPONENTS/ZEIGARNIK_LOOPS.TSX ---
-// ============================================================================
 
+import useAppStore from "@/store/useAppStore";
+import { AlertCircle } from "lucide-react";
 const ZeigarnikLoops = ({ onNavigate }: { onNavigate: () => void }) => {
   const plans = useAppStore((s) => s.plans);
   
@@ -46,3 +46,5 @@ const ZeigarnikLoops = ({ onNavigate }: { onNavigate: () => void }) => {
     </div>
   );
 };
+
+export default ZeigarnikLoops;

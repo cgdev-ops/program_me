@@ -5,8 +5,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import FlowEngine from "./components/FlowEngine";
 import useAppStore from "@/store/useAppStore";
-import OnboardingTour from "./components/onboarding_tour";
-import PlanCreator from "./components/plan_creator";
+import OnboardingTour from "@/app/components/Onboarding_tour";
+import PlanCreator from "./components/PlanCreator";
+import ApplicationTracker from "./components/ApplicationTracker";
+
 import {
   Settings,
   Play,
@@ -29,9 +31,13 @@ import {
 export default function Dashboard() {
   const { theme, setTheme, sessions, exportData, importData } = useAppStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"flow" | "pathways">("flow");
   const [isMounted, setIsMounted] = useState(false);
+  // <-- Update state to include "tracker"
+  const [activeTab, setActiveTab] = useState<"flow" | "pathways" | "tracker">(
+    "flow",
+  );
   const { resetTour } = useAppStore();
+
   // Hydration fix & Theme application
   useEffect(() => {
     setIsMounted(true);
@@ -95,6 +101,17 @@ export default function Dashboard() {
             >
               Pathways
             </button>
+            {/* <-- NEW TRACKER TAB --> */}
+            <button
+              onClick={() => setActiveTab("tracker")}
+              className={`px-4 py-2 text-sm font-bold uppercase tracking-wider rounded-lg transition-colors ${
+                activeTab === "tracker"
+                  ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+              }`}
+            >
+              Job Tracker
+            </button>
           </div>
 
           <div className="flex items-center gap-6">
@@ -120,11 +137,11 @@ export default function Dashboard() {
 
         {/* Main Content Area */}
         <main className="h-full">
-          {activeTab === "flow" ? (
+          {activeTab === "flow" && (
             <FlowEngine onNavigateToPathways={() => setActiveTab("pathways")} />
-          ) : (
-            <PlanCreator />
           )}
+          {activeTab === "pathways" && <PlanCreator />}
+          {activeTab === "tracker" && <ApplicationTracker />}
         </main>
 
         {/* Settings Modal */}
@@ -215,4 +232,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

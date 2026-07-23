@@ -1,6 +1,6 @@
-// ============================================================================
+
 // --- components/OnboardingTour.tsx ---
-// ============================================================================
+
 import React from "react";
 import { Map, Play, Book, AlertCircle, ChevronRight } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore"; // Adjust this path if your store is located elsewhere
