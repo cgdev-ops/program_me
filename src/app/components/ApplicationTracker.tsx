@@ -1,6 +1,6 @@
-// ============================================================================
+
 // --- components/ApplicationTracker.tsx ---
-// ============================================================================
+
 import React, { useState } from "react";
 import {
   Plus,
@@ -13,7 +13,6 @@ import {
   XCircle,
   MinusCircle,
   MessageSquare,
-  BarChart2,
   List,
   Hash,
 } from "lucide-react";
@@ -55,7 +54,7 @@ const statusConfig: Record<
     icon: <XCircle size={16} />,
   },
   ignored: {
-    label: "Ignored/Ghosted",
+    label: "Ghosted",
     colorClass:
       "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/30",
     icon: <MinusCircle size={16} />,
@@ -111,11 +110,12 @@ const ApplicationTracker = () => {
   const activeApp = applications.find((app) => app.id === activeModalAppId);
 
   return (
-    <div className="flex flex-col gap-6 h-[calc(100vh-200px)] min-h-[600px] relative">
+    // UNIFIED CARD WRAPPER: Added h-full, overflow-hidden, and card styles to bind everything.
+    <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 flex flex-col gap-6 h-[calc(100vh-200px)] min-h-[600px] overflow-hidden relative w-full">
       {/* HEADER & VIEW TOGGLE */}
-      <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white uppercase tracking-widest drop-shadow-[0_0_8px_rgba(96,165,250,0.3)]">
             Job Tracker
           </h2>
           <p className="text-sm text-zinc-500 font-mono mt-1">
@@ -151,14 +151,14 @@ const ApplicationTracker = () => {
       {/* SIMPLE MODE (NUMBERS ONLY)                 */}
       {/* ========================================== */}
       {viewMode === "simple" && (
-        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-4">
+        <div className="flex-1 overflow-y-auto pr-2 min-h-0 flex flex-col gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {(Object.keys(statusConfig) as AppStatus[]).map((status) => (
               <div
                 key={status}
-                className={`flex flex-col items-center justify-center p-8 rounded-2xl border bg-white dark:bg-zinc-900/50 ${statusConfig[status].colorClass.replace("bg-", "hover:bg-").replace("/10", "/5")} transition-colors`}
+                className={`flex flex-col items-center justify-center p-8 rounded-2xl border bg-zinc-50 dark:bg-zinc-950 ${statusConfig[status].colorClass.replace("bg-", "hover:bg-").replace("/10", "/5")} transition-colors`}
               >
-                <div className="text-5xl font-bold font-mono mb-2">
+                <div className="text-5xl font-bold font-mono mb-2 text-zinc-900 dark:text-white">
                   {stats[status]}
                 </div>
                 <div className="text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2 opacity-80">
@@ -181,14 +181,14 @@ const ApplicationTracker = () => {
       {/* ========================================== */}
       {viewMode === "detailed" && (
         <>
-          {/* STATS RIBBON (Mini version for Detailed Mode) */}
+          {/* STATS RIBBON */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
             {(Object.keys(statusConfig) as AppStatus[]).map((status) => (
               <div
                 key={status}
-                className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center ${statusConfig[status].colorClass}`}
+                className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center bg-zinc-50 dark:bg-zinc-950 ${statusConfig[status].colorClass.replace("bg-", "border-")}`}
               >
-                <div className="text-2xl font-bold font-mono">
+                <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-white">
                   {stats[status]}
                 </div>
                 <div className="text-[10px] uppercase tracking-widest mt-1 opacity-80 flex items-center gap-1">
@@ -200,7 +200,7 @@ const ApplicationTracker = () => {
 
           {/* ADD FORM */}
           <div className="flex flex-col md:flex-row gap-2 shrink-0 mt-2">
-            <div className="flex-1 flex items-center bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 focus-within:border-blue-500 transition-colors">
+            <div className="flex-1 flex items-center bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 focus-within:border-blue-500 transition-colors">
               <Building size={18} className="text-zinc-400 mr-2" />
               <input
                 type="text"
@@ -210,7 +210,7 @@ const ApplicationTracker = () => {
                 className="flex-1 bg-transparent py-4 text-zinc-900 dark:text-white focus:outline-none"
               />
             </div>
-            <div className="flex-1 flex items-center bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 focus-within:border-blue-500 transition-colors">
+            <div className="flex-1 flex items-center bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 focus-within:border-blue-500 transition-colors">
               <Briefcase size={18} className="text-zinc-400 mr-2" />
               <input
                 type="text"
@@ -239,7 +239,7 @@ const ApplicationTracker = () => {
                 <div
                   key={app.id}
                   onClick={() => setActiveModalAppId(app.id)}
-                  className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:border-blue-500/50 transition-colors group shrink-0 shadow-sm"
+                  className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:border-blue-500/50 transition-colors group shrink-0"
                 >
                   <div>
                     <h3 className="font-bold text-lg text-zinc-900 dark:text-white group-hover:text-blue-500 transition-colors">
@@ -280,7 +280,7 @@ const ApplicationTracker = () => {
         </>
       )}
 
-      {/* THE MASSIVE EDIT MODAL (Available in both modes) */}
+      {/* THE MASSIVE EDIT MODAL */}
       {activeModalAppId && activeApp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 max-w-3xl w-full shadow-2xl relative flex flex-col gap-6">
@@ -323,7 +323,7 @@ const ApplicationTracker = () => {
               </div>
             </div>
 
-            {/* MASSIVE TEXT AREA FOR NOTES */}
+            {/* TEXT AREA FOR NOTES */}
             <div className="flex-1">
               <label className="text-xs font-bold tracking-widest text-zinc-500 uppercase block mb-3">
                 Interview Notes, Salary Details, & Outcomes

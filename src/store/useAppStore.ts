@@ -1,9 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-// ============================================================================
 // --- INTERFACES ---
-// ============================================================================
 
 interface Category {
   id: string;
@@ -38,8 +36,12 @@ interface Plan {
   tasks: DailyTask[];
 }
 
-// --- NEW: Application Tracker Interfaces ---
-export type AppStatus = "applied" | "ignored" | "interview" | "rejected" | "hired";
+export type AppStatus =
+  | "applied"
+  | "ignored"
+  | "interview"
+  | "rejected"
+  | "hired";
 
 export interface Application {
   id: string;
@@ -70,7 +72,6 @@ interface AppState {
   deletePlan: (id: string) => void;
   updateTask: (planId: string, day: number, data: Partial<DailyTask>) => void;
 
-  // --- NEW: Application Tracker Actions ---
   applications: Application[];
   addApplication: (app: Application) => void;
   updateApplication: (id: string, data: Partial<Application>) => void;
@@ -81,9 +82,7 @@ interface AppState {
   importData: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-// ============================================================================
 // --- UTILS ---
-// ============================================================================
 
 const generateId = () => {
   return typeof crypto !== "undefined" && crypto.randomUUID
@@ -91,7 +90,7 @@ const generateId = () => {
     : Math.random().toString(36).substring(2, 15);
 };
 
-const triggerDownload = (data: any, filename: string) => {
+const triggerDownload = (data: JSON, filename: string) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json",
   });
@@ -115,7 +114,7 @@ export const useAppStore = create<AppState>()(
       settings: { defaultTimerMinutes: 25, defaultBreakMinutes: 5 },
       updateSettings: (newSettings) =>
         set((state) => ({ settings: { ...state.settings, ...newSettings } })),
-      
+
       hasSeenTour: false,
       completeTour: () => set({ hasSeenTour: true }),
       resetTour: () => set({ hasSeenTour: false }),
@@ -126,7 +125,10 @@ export const useAppStore = create<AppState>()(
       ],
       addCategory: (name) =>
         set((state) => ({
-          categories: [...state.categories, { id: generateId(), name, isDefault: false }],
+          categories: [
+            ...state.categories,
+            { id: generateId(), name, isDefault: false },
+          ],
         })),
 
       sessions: [],
@@ -144,10 +146,10 @@ export const useAppStore = create<AppState>()(
               ? {
                   ...plan,
                   tasks: plan.tasks.map((task) =>
-                    task.day === day ? { ...task, ...data } : task
+                    task.day === day ? { ...task, ...data } : task,
                   ),
                 }
-              : plan
+              : plan,
           ),
         })),
 
@@ -158,7 +160,7 @@ export const useAppStore = create<AppState>()(
       updateApplication: (id, data) =>
         set((state) => ({
           applications: state.applications.map((app) =>
-            app.id === id ? { ...app, ...data } : app
+            app.id === id ? { ...app, ...data } : app,
           ),
         })),
       deleteApplication: (id) =>
@@ -179,7 +181,7 @@ export const useAppStore = create<AppState>()(
         };
         triggerDownload(
           data,
-          `synapse-backup-${new Date().toISOString().slice(0, 10)}.json`
+          `synapse-backup-${new Date().toISOString().slice(0, 10)}.json`,
         );
       },
       exportPlan: (planId) => {
@@ -188,7 +190,7 @@ export const useAppStore = create<AppState>()(
         const data = { type: "SYNAPSE_PATHWAY", plan };
         triggerDownload(
           data,
-          `pathway-${plan.name.replace(/\s+/g, "-").toLowerCase()}.json`
+          `pathway-${plan.name.replace(/\s+/g, "-").toLowerCase()}.json`,
         );
       },
       importData: (event) => {
@@ -201,7 +203,8 @@ export const useAppStore = create<AppState>()(
             if (parsed.type === "SYNAPSE_BACKUP") {
               if (parsed.sessions) set({ sessions: parsed.sessions });
               if (parsed.plans) set({ plans: parsed.plans });
-              if (parsed.applications) set({ applications: parsed.applications }); // <-- Added to restore
+              if (parsed.applications)
+                set({ applications: parsed.applications }); // <-- Added to restore
               if (parsed.theme) set({ theme: parsed.theme });
               if (parsed.settings) set({ settings: parsed.settings });
               if (parsed.categories) set({ categories: parsed.categories });
@@ -220,7 +223,7 @@ export const useAppStore = create<AppState>()(
         reader.readAsText(file);
       },
     }),
-    { name: "synapse-storage" }
-  )
+    { name: "synapse-storage" },
+  ),
 );
 export default useAppStore;

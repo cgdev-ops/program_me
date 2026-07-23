@@ -43,7 +43,7 @@ To ensure lightning-fast UI updates and absolute data privacy, Synapse OS comple
 
 - [x] **Global Flow Timer:** Track deep work sessions.
 - [x] **Pathway Generator:** Create N-day courses with isolated daily task nodes.
-- [x] **Hexagonal Data Visualization:** Dynamic rendering of completed vs. active days.
+- [x] **Hexagonal Data Visualization:** Dynamic rendering of completed vs. active days. -[x] Job Application Tracker: Track your career progression with flexibility. Record detailed interview notes and company data, or use the quick-log dashboard to simply track your conversion numbers (Applied, Interviewing, Hired, etc.).
 - [x] **Nested State Management:** Manage multiple timers (Global Flow + individual Pathway Node timers) simultaneously without state collision.
 - [x] **Zeigarnik Open Loops:** Dashboard alerts for abandoned, mid-progress tasks.
 - [x] **Data Import/Export:** Full JSON backups and single-pathway sharing.
@@ -53,6 +53,8 @@ To ensure lightning-fast UI updates and absolute data privacy, Synapse OS comple
 - **Spaced Repetition Export:** Automatically extract notes from daily nodes and format them into CSV files for Anki/Quizlet imports.
 - **PWA Integration:** Add offline service workers and a web manifest for native installation.
 - **Interleaved Practice Scheduler:** A mode that randomly alternates daily tasks to force cognitive adaptation.
+- **Mobile UI Overhaul:** Add comprehensive Android/iOS version.
+  > _Note: While the application functions on mobile browsers, the UI is not yet fully responsive. A comprehensive mobile-friendly overhaul is planned for future iterations._
 
 ## 🤝 Open to Collaboration
 
@@ -64,5 +66,5 @@ If you are a developer or designer interested in learning OS concepts, local-fir
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com//synapse-os.git](https://github.com/yourusername/synapse-os.git)
+   git clone [https://github.com/cgdev-ops/program_me]
    ```
