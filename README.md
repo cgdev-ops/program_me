@@ -66,5 +66,5 @@ If you are a developer or designer interested in learning OS concepts, local-fir
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/cgdev-ops/program_me]
+   git clone https://github.com/cgdev-ops/program_me
    ```
