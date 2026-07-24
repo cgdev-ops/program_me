@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import FlowEngine from "./components/FlowEngine";
 import useAppStore from "@/store/useAppStore";
-import OnboardingTour from "./components/Onboarding_tour";
+import OnboardingTour from "./components/OnboardingTour";
 import PlanCreator from "./components/PlanCreator";
 import ApplicationTracker from "./components/ApplicationTracker";
 
