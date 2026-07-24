@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import FlowEngine from "./components/FlowEngine";
 import useAppStore from "@/store/useAppStore";
-import OnboardingTour from "@/app/components/Onboarding_tour";
+import OnboardingTour from "./components/Onboarding_tour";
 import PlanCreator from "./components/PlanCreator";
 import ApplicationTracker from "./components/ApplicationTracker";
 
@@ -38,14 +38,12 @@ export default function Dashboard() {
   );
   const { resetTour } = useAppStore();
 
-
   useEffect(() => {
-    // Wrapping in a micro-timeout completely bypasses the strict linter rule 
+    // Wrapping in a micro-timeout completely bypasses the strict linter rule
     // while executing instantly enough to prevent UI flashes.
     const timer = setTimeout(() => setIsMounted(true), 0);
     return () => clearTimeout(timer);
   }, []);
-
 
   useEffect(() => {
     if (!isMounted) return; // Wait for hydration before manipulating the DOM
@@ -60,7 +58,7 @@ export default function Dashboard() {
   if (!isMounted) return null; // Prevent SSR flicker with Zustand
   const totalMinutes = sessions.reduce(
     (acc, curr) => acc + curr.durationMinutes,
-    0
+    0,
   );
 
   const totalHours = (totalMinutes / 60).toFixed(1);
